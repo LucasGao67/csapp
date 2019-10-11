@@ -306,8 +306,13 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-
-  return 2;
+int exp = (uf&0x7f800000)>>23;
+  int sign = uf&(1<<31);
+  if(exp==0) return uf<<1|sign;
+  if(exp==255) return uf;
+  exp++;
+  if(exp==255) return 0x7f800000|sign;
+  return (exp<<23)|(uf&0x807fffff);
 }
 /*
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -322,13 +327,27 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  int exp = (uf&0x7f800000)>>23;
-  int sign = uf&(1<<31);
-  if(exp==0) return uf<<1|sign;
-  if(exp==255) return uf;
-  exp++;
-  if(exp==255) return 0x7f800000|sign;
-  return (exp<<23)|(uf&0x807fffff);
+  int exp = ((uf & 0x7f800000) >> 23) - 127; // 127 为偏移值 bias
+    int sign = uf >> 31;
+    int frac = uf & 0x007fffff;
+    if (exp < 0) return 0;
+    if (exp > 31) return 0x80000000u;
+    frac |= 0x00800000;
+    if (exp > 23) { // frac 是23个小数位，现在已经转换为整数，相当于左移了23位，如果exp > 23,则再左移，否则右移还回去
+        frac = frac << (exp - 23);
+    } else {
+        frac = frac >> (23 - exp);
+    }
+
+    // 溢出判断
+    int f = frac >> 31;
+    if (!(f ^ sign)) {
+        return frac;
+    } else if (f) { // 不懂
+        return 0x80000000u;
+    } else {
+        return ~frac + 1;
+    }
 }
 /*
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -344,5 +363,9 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  int INF = 0xff<<23;
+  int exp = x + 127;
+  if(exp <= 0) return 0;
+  if(exp >= 255) return INF;
+  return exp << 23;
 }
